@@ -208,7 +208,7 @@ init_identity(A) :-
 % failure-driven loop to test all identities
 test :-
   init_identity(_A),  % initialise; don't reveal identity
-  user:find_identity(A),  % program under test
+  usere:find_identity(A),  % program under test
   ailp_identity(I),
   ( A=I -> writeln('I am':A)
   ; otherwise -> writeln('Wrong answer':A)
