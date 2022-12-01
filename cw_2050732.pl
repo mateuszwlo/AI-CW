@@ -3,13 +3,31 @@ solve_task(Task,Cost) :-
     my_agent(A), 
     get_agent_position(A,P),
     (achieved(Task,P) -> true
-    ;otherwise   -> search_a_star(Task, [[arc(0,P)]], [], Path),
+    ;otherwise   -> search(P, Task, Path),
                     agent_do_moves(A,Path),
                     length(Path,Cost)).
 
+search(P, go(T), Path) :- search_a_star(go(T), [[arc(0,P)]], [], Path).
+search(P, find(o(K)), Path) :- search_bf(find(o(K)), [[P]], [], Path).
+search(P, find(c(K)), Path) :- search_bf(find(c(K)), [[P]], [], Path).
+
+search_bf(Task,[Next|Rest],Visited,Path) :-
+    Next = [Pos|RPath],
+    (achieved(Task,Pos) -> reverse([Pos|RPath],[_|Path])
+    ;otherwise     -> (findall([NP,Pos|RPath],
+                               (map_adjacent(Pos,NP,empty),
+                               \+ member(NP,Visited), 
+                               \+ member([NP|_],Rest)),
+                               Newfound),
+                      append(Rest,Newfound,NewQueue),
+                      search_bf(Task,NewQueue,[Pos|Visited],Path))).
+
+%89 frames for A*
+%100 frames for BF
+
 search_a_star(Task,[Next|Rest],Visited,Path) :-
     Next = [Pos|RPath],
-    Pos = arc(C,P),
+    Pos = arc(_,P),
     (achieved(Task,P) -> reverse([Pos|RPath],[_|WPath]), formatPath(WPath, Path)
     ;otherwise     -> (findall([arc(NC,NP),Pos|RPath],
                                (map_adjacent(P,NP,empty), 
@@ -27,9 +45,9 @@ manhattan_distance(p(X,Y), go(p(X1,Y1)), H) :-
 manhattan_distance(_, _, H) :- H is 0.
 
 formatPath([], []).
-formatPath([arc(C,P)|T], [P|T1]) :- formatPath(T, T1).
+formatPath([arc(_,P)|T], [P|T1]) :- formatPath(T, T1).
 
-member_of_list(p(X,Y)), []) :- false.
+member_of_list(_, []) :- false.
 member_of_list(arc(C,p(X,Y)), [arc(C1,p(X1,Y1))|T]) :- 
     X == X1, Y == Y1, C1 =< C
     ; 
