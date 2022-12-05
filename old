@@ -1,0 +1,118 @@
+% True if link L appears on A's wikipedia page
+actor_has_link(L,A) :- 
+    actor(A), wp(A,WT), wt_link(WT,L).
+
+eliminate(As, A, Oracles, Stations) :-
+    As=[A], !
+    ;
+    ailp_grid_size(S),
+    EMAX is S * S / 4,
+    EASK is EMAX / 10,
+    my_agent(N),
+    get_agent_position(N,P),
+    get_agent_energy(N,E),
+    closest_oracle(P, Oracles, node(OL, OPos, OPath)),
+    closest_station(P, Stations, node(SL, SPos, SPath)),
+    (map_adjacent(P, _, c(K)) -> 
+    agent_do_moves(N, OPath),
+    agent_ask_oracle(N, o(K), link, L),
+    delete(Oracles, OPos, NOracles),
+    include(actor_has_link(L),As,NewAs), 
+    eliminate(NewAs, A, NOracles, Stations)
+    ; OL < SL -> 
+    agent_do_moves(N, OPath),
+    map_adjacent(OPos, _, o(K)),
+    agent_ask_oracle(N, o(K), link, L),
+    delete(Oracles, OPos, NOracles),
+    include(actor_has_link(L),As,NewAs), 
+    eliminate(NewAs, A, NOracles, Stations)
+    ; otherwise ->
+    agent_do_moves(N, SPath),
+    map_adjacent(SPos, _, c(K)),
+    agent_topup_energy(N, c(K)),
+    eliminate(As, A, Oracles, Stations)
+    ).
+
+% Deduce the identity of the secret actor A
+find_identity(A) :- 
+    findall(A,actor(A),As), 
+    find_all_oracles(Oracles),
+    find_all_charging_stations(Stations),
+    eliminate(As, A, Oracles, Stations).
+
+find_all_oracles(Oracles) :-
+    my_agent(N),
+    get_agent_position(N,P),
+    convlist(find_oracle(P), [1,2,3,4,5,6,7,8,9,10], Oracles).
+
+find_all_charging_stations(Stations) :-
+    my_agent(N),
+    get_agent_position(N,P),
+    convlist(find_charging_station(P), [1,2,3,4], Stations).
+
+find_charging_station(P, K, Pos) :- 
+    find_nodes(c(K), [[P]], [], Pos).
+
+find_oracle(P, K, Pos) :- 
+    find_nodes(o(K), [[P]], [], Pos).
+
+find_path_to_oracle(P, Pos, node(L, Path)) :-
+    search_a_star_node(o(Pos), [[arc(0,P)]], [], Path),
+    length(Path, L).
+
+find_path_to_station(P, Pos, node(L, Path)) :-
+    search_a_star_node(c(Pos), [[arc(0,P)]], [], Path),
+    length(Path, L).
+
+closest_station(Pos, List, node(L, P, Path)) :-
+    convlist(find_path_to_station(Pos), List, Paths),
+    sort(Paths, SPaths),
+    nth1(1, SPaths, node(L, Path)),
+    last(Path, P).
+
+closest_oracle(Pos, List, node(L, P, Path)) :-
+    convlist(find_path_to_oracle(Pos), List, Paths),
+    sort(Paths, SPaths),
+    nth1(1, SPaths, node(L, Path)),
+    last(Path, P).
+
+find_nodes(Obj,[Next|Rest],Visited,Position) :-
+    Next = [Pos|RPath],
+    (map_adjacent(Pos,P,Obj) -> reverse([P,Pos|RPath],[_|Path]), last(Path, Position)
+    ;otherwise     -> (findall([NP,Pos|RPath],
+                               (map_adjacent(Pos,NP,empty),
+                               \+ member(NP,Visited), 
+                               \+ member([NP|_],Rest)),
+                               Newfound),
+                      append(Rest,Newfound,NewQueue),
+                      find_nodes(Obj,NewQueue,[Pos|Visited],Position))).
+
+search_a_star_node(o(Obj),[Next|Rest],Visited,Path) :-
+    Next = [Pos|RPath],
+    Pos = arc(_,P),
+    (map_adjacent(P, Obj, o(K)) -> reverse([Pos|RPath],[_|WPath]), formatPath(WPath, Path)
+    ;otherwise     -> (findall([arc(NC,NP),Pos|RPath],
+                               (map_adjacent(P,NP,empty), 
+                               length([Pos|RPath], G),
+                               manhattan_distance(NP, go(Obj), H), NC is G + H,
+                               \+ member_of_list([arc(NC,NP)|_],Rest),
+                               \+ member_of_list(arc(NC,NP),Visited)),
+                               Children),
+                      append(Rest,Children,NewQueue),
+                      sort(NewQueue, SortedQueue),
+                      search_a_star_node(o(Obj),SortedQueue,[Pos|Visited],Path))).
+
+search_a_star_node(c(Obj),[Next|Rest],Visited,Path) :-
+    Next = [Pos|RPath],
+    Pos = arc(_,P),
+    (map_adjacent(P, Obj, c(K)) -> reverse([Pos|RPath],[_|WPath]), formatPath(WPath, Path)
+    ;otherwise     -> (findall([arc(NC,NP),Pos|RPath],
+                               (map_adjacent(P,NP,empty), 
+                               length([Pos|RPath], G),
+                               manhattan_distance(NP, go(Obj), H), NC is G + H,
+                               \+ member_of_list([arc(NC,NP)|_],Rest),
+                               \+ member_of_list(arc(NC,NP),Visited)),
+                               Children),
+                      append(Rest,Children,NewQueue),
+                      sort(NewQueue, SortedQueue),
+                      search_a_star_node(c(Obj),SortedQueue,[Pos|Visited],Path))).

@@ -3,7 +3,7 @@ solve_task(Task,Cost) :-
     my_agent(A), 
     get_agent_position(A,P),
     (achieved(Task,P) -> true
-    ;otherwise   -> search(P, Task, Path),
+    ;otherwise   -> search_bf(Task, [[P]], [], Path),
                     agent_do_moves(A,Path),
                     length(Path,Cost)).
 
@@ -22,18 +22,18 @@ search_bf(Task,[Next|Rest],Visited,Path) :-
                       append(Rest,Newfound,NewQueue),
                       search_bf(Task,NewQueue,[Pos|Visited],Path))).
 
-%89 frames for A*
+%88 frames for A*
 %100 frames for BF
 
 search_a_star(Task,[Next|Rest],Visited,Path) :-
     Next = [Pos|RPath],
-    Pos = arc(_,P),
+    Pos = arc(C,P),
     (achieved(Task,P) -> reverse([Pos|RPath],[_|WPath]), formatPath(WPath, Path)
     ;otherwise     -> (findall([arc(NC,NP),Pos|RPath],
                                (map_adjacent(P,NP,empty), 
                                length([Pos|RPath], G),
                                manhattan_distance(NP, Task, H), NC is G + H,
-                               \+ member_of_list(arc(NC,NP),Rest),
+                               \+ member_of_list([arc(NC,NP)|_],Rest),
                                \+ member_of_list(arc(NC,NP),Visited)),
                                Children),
                       append(Rest,Children,NewQueue),

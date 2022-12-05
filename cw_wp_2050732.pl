@@ -1,53 +1,141 @@
-% True if link L appears on A's wikipedia page
-actor_has_link(L,A) :- 
-    actor(A), wp(A,WT), wt_link(WT,L).
+actor_has_link(L,A) :-
+actor(A), wp(A,WT), wt_link(WT,L).
 
-eliminate(As, A, Oracles, Paths) :-
+eliminate(As,A,Oracles, Stations) :-
+    write("eliminate(As,A,Oracles, Stations)"),
+    nl,
     As=[A], !
     ;
-    ailp_grid_size(S),
-    EMAX is S * S / 4,
-    EASK is EMAX / 10,
     my_agent(N),
-    get_agent_position(N,P),
-    get_agent_energy(1,E),
-    (E =< 20 ->
-    convlist(find_charging_station(P), [1,2,3,4], ChargingStations),
-    sort(ChargingStations, SChargingStations),
-    nth0(0, SChargingStations, charging(CLen, CK, CPath)),
-    agent_do_moves(N, CPath),
-    agent_topup_energy(N,c(CK)),
-    eliminate(As, A, UnChecked)
+    get_agent_position(N, Pos),
+    get_paths_to_oracles(Pos, Oracles, OPaths),
+    get_paths_to_stations(Pos, Stations, SPaths),
+    eliminate(As,A,Oracles, Stations, OPaths, SPaths).
+
+eliminate(As,A,Oracles,Stations,OPaths,SPaths) :-
+    write("eliminate(As,A,Oracles,Stations,OPaths,SPaths)"),
+    nl,
+    my_agent(N),
+    get_agent_energy(N, E),
+    get_agent_position(N, Pos),
+    write(Pos),
+    write(" "),
+    write(E),
+    nl,
+    nth1(1, OPaths, (OLen, OraclePosition, OPath)),
+    nth1(1, SPaths, (SLen, StationPosition, SPath)),
+    (OLen == 0 -> get_agent_position(N, OP) 
+    ; otherwise -> last(OPath, OP)),
+    (should_topup(SLen, OLen, OP, Stations)-> 
+        write("topping up"),
+        nl,
+        agent_do_moves(N, SPath),
+        lookup_pos(StationPosition, c(K)),
+        agent_topup_energy(N, c(K)),
+        eliminate(As,A,Oracles,Stations)
     ; otherwise ->
-    sort(Paths, SPaths),
-    nth0(0, SPaths, oracle(Len, K, Pos, Path)),
-    agent_do_moves(N,Path),
-    agent_ask_oracle(N, o(K), link, L),
-    delete(Oracles, Pos, NOracles),
-    include(actor_has_link(L),As,NewAs), 
+        write("going to oracle"),
+        nl,
+        agent_do_moves(N, OPath),
+        lookup_pos(OraclePosition, o(K)),
+        agent_ask_oracle(N,o(K),link,L),
+        delete(Oracles, OraclePosition, NOracles),
+        include(actor_has_link(L),As,ViableAs),
+        eliminate(ViableAs,A,NOracles,Stations)
+    ).
 
-    eliminate(NewAs, A, NOracles)).
-
-% Deduce the identity of the secret actor A
-find_identity(A) :- 
+find_identity(A) :-
+    write("find_identity"),
+    nl,
     findall(A,actor(A),As), 
-    find_all_oracles(Oracles, Paths),
-    eliminate(As,A, Oracles, Paths).
+    find_all_oracles((Oracles, OPaths)),
+    find_all_stations((Stations, SPaths)),
+    eliminate(As,A,Oracles,Stations, OPaths, SPaths).
 
-find_all_oracles(Oracles, Paths) :-
+should_topup(SLen, OLen, OraclePosition, Stations) :-
+    write("should_topup"),
+    nl,
+    SLen \= 0,
     my_agent(N),
-    get_agent_position(N,P),
-    convlist(find_oracle(P), [1,2,3,4,5,6,7,8,9,10], Paths),
-    get_oracle_locations(Paths, Oracles).
+    get_agent_energy(N,E),
+    SLen =< E,
+    ailp_grid_size(S),
+    MAX is S * S / 4,
+    round(MAX, EMAX),
+    ASK is EMAX / 10,
+    round(ASK, EASK),
+    get_paths_to_stations(OraclePosition, Stations, SPaths),
+    nth1(1, SPaths, (Len, _, _)),
+    H is EASK + OLen + Len,
+    H > E.
 
-find_charging_station(P, K, charging(L, K, Path)) :- 
-    search(P, find(c(K)), Path),
+find_all_stations((Stations, SPaths)) :-
+    write("find_all_stations((Stations, SPaths))"),
+    nl,
+    my_agent(A),
+    get_agent_position(A,Pos),
+    convlist(search_for_node([[Pos]], []), [c(1),c(2),c(3),c(4)], List),
+    sort(List, SPaths),
+    get_node_list(SPaths, Stations).
+
+get_paths_to_stations(Pos, Stations, Paths) :-
+    write("get_paths_to_stations(Pos, Stations, Paths)"),
+    nl,
+    convlist(path_to_station(Pos), Stations, Ps),
+    sort(Ps, Paths).
+
+path_to_station(Pos, StationPosition, (L, StationPosition, Path)) :-
+    write("path_to_station(Pos, StationPosition, (L, StationPosition, Path))"),
+    nl,
+    search_bf_node([[Pos]], [], StationPosition,Path),
     length(Path, L).
 
-find_oracle(P, K, oracle(L, K, Pos, Path)) :- 
-    search(P, find(o(K)), Path),
-    last(Path, Pos),
+find_all_oracles((Oracles, SPaths)) :-
+    write("find_all_oracles((Oracles, SPaths))"),
+    nl,
+    my_agent(A),
+    get_agent_position(A,Pos),
+    convlist(search_for_node([[Pos]], []), [o(1),o(2),o(3),o(4),o(5),o(6),o(7),o(8),o(9),o(10)], List),
+    sort(List, SPaths),
+    get_node_list(SPaths, Oracles).
+
+get_paths_to_oracles(Pos, Oracles, Paths) :-
+    write("get_paths_to_oracles(Pos, Oracles, Paths)"),
+    nl,
+    convlist(path_to_oracle(Pos), Oracles, Ps),
+    sort(Ps, Paths).
+
+path_to_oracle(Pos, OraclePosition, (L, OraclePosition, Path)) :-
+    write("path_to_oracle("),
+    write(Pos),
+    write(","),
+    write(OraclePosition),
+    write(", (L, OraclePosition, Path))"),
+    nl,
+    search_bf_node([[Pos]], [], OraclePosition, Path),
     length(Path, L).
 
-get_oracle_locations([], []).
-get_oracle_locations([oracle(_,_,Pos,_)|T], [Pos|T1]) :- get_oracle_locations(T, T1).
+search_for_node([Next|Rest], Visited, Obj, (L, Position, Path)) :-
+    Next = [Pos|RPath],
+    (map_adjacent(Pos, Position, Obj) -> reverse([Pos|RPath],[_|Path]), length(Path, L)
+    ;otherwise     -> (findall([NP,Pos|RPath],
+                               (map_adjacent(Pos,NP,empty),
+                               \+ member(NP,Visited), 
+                               \+ member([NP|_],Rest)),
+                               Newfound),
+                      append(Rest,Newfound,NewQueue),
+                      search_for_node(NewQueue, [Pos|Visited], Obj, (L, Position, Path)))).
+
+search_bf_node([Next|Rest], Visited, Position, Path) :-
+    Next = [Pos|RPath],
+    (map_adjacent(Pos, Position, _) -> reverse([Pos|RPath],[_|Path])
+    ;otherwise     -> (findall([NP,Pos|RPath],
+                               (map_adjacent(Pos,NP,empty),
+                               \+ member(NP,Visited), 
+                               \+ member([NP|_],Rest)),
+                               Newfound),
+                      append(Rest,Newfound,NewQueue),
+                      search_bf_node(NewQueue, [Pos|Visited], Position, Path))).
+
+get_node_list([], []).
+get_node_list([(_, Position, _)|T], [Position|T1]) :- get_node_list(T, T1).
