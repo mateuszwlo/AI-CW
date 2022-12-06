@@ -30,8 +30,8 @@ search_a_star(Task,[Next|Rest],Visited,Path) :-
                                \+ member_of_rest(arc(NC,NP),Rest),
                                \+ member_of_list(arc(NC,NP),Visited)),
                                Children),
-                      append(Rest,Children,NewQueue),
-                      sort(NewQueue, SortedQueue),
+                      sort(Children, SChildren),
+                      ord_union(Rest, SChildren, SortedQueue),
                       search_a_star(Task,SortedQueue,[Pos|Visited],Path))).
 
 % If Task is not in the form go(P), then cannot calculate a heuristic
