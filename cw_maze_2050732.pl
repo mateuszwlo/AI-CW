@@ -11,8 +11,10 @@ solve(A, Visited, Pivots, NVisisted, NPivots) :-
     findall((W,p(X,Y)),(agent_adjacent(A,p(X,Y),empty),\+ member(p(X,Y),Visited),W is X + Y),AvailableMoves),
     length(AvailableMoves, L),
     length(Pivots, PLen),
+
 % As the exit is at p(N,N), pick the square closest to the exit to explore first
 % Navigate to this square and add it to the visited list
+
     (L > 0 -> 
         sort(AvailableMoves, SMoves),
         reverse(SMoves,Moves),
@@ -20,15 +22,19 @@ solve(A, Visited, Pivots, NVisisted, NPivots) :-
         get_agent_position(A, P),
         agent_do_moves(A, [Pos]),
         append([Pos], Visited, NVisisted),
+
 % If there is more than 1 direction you can go from this current position, it is a pivot point 
 % Add this position to the pivot list, either this agent or another one will explore in the other direction 
+    
     (L > 1 -> 
         H is L - 1, append([pivot(H, P)], Pivots, NPivots)
     ; otherwise -> NPivots = Pivots
     )
+
 % If Agent A has no available moves, visit the nearest pivot point to it
 % Some pivot points can have multiple directions to explore
 % Subtract 1 from the directions to explore counter and remove from the list if all directions have been explored
+    
     ; otherwise -> 
         (PLen == 0 -> NVisisted = Visited, NPivots = Pivots
         ; otherwise -> 
