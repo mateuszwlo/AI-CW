@@ -42,7 +42,7 @@ find_identity(A) :-
     findall(A,actor(A),As), 
     find_all_oracles((Oracles, OPaths)),
     find_all_stations((Stations, SPaths)),
-    eliminate(As,A,Oracles,Stations, OPaths, SPaths)
+    eliminate(As,A,Oracles,Stations, OPaths, SPaths), !
     ; otherwise -> A = unknown.
 
 % Every move you make, you want to make sure you will have enough energy to visit a charging station if needed
@@ -83,11 +83,13 @@ path_to_station(Pos, StationPosition, (L, StationPosition, Path)) :-
     search_a_star_node([[arc(0,Pos)]], [], StationPosition,Path),
     length(Path, L).
 
-% Using A* search to find locations to each oracle and the paths to them from the agents current position
+% Using A* search to find locations to each not queried oracle and the paths to them from the agents current position
 find_all_oracles((Oracles, SPaths)) :-
     my_agent(A),
     get_agent_position(A,Pos),
-    convlist(search_for_node([[arc(0,Pos)]], []), [o(1),o(2),o(3),o(4),o(5),o(6),o(7),o(8),o(9),o(10)], List),
+    O = [o(1),o(2),o(3),o(4),o(5),o(6),o(7),o(8),o(9),o(10)],
+    exclude(agent_check_oracle(A), O, Os),
+    convlist(search_for_node([[arc(0,Pos)]], []), Os, List),
     sort(List, SPaths),
     get_node_list(SPaths, Oracles).
 
